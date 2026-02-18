@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - Simple POS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="notification-container" class="notification-container"></div>
+
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            <h1>Create Account</h1>
+            <p>Join Simple POS today.</p>
+        </div>
+        
+        <form id="signup-form">
+            <div style="display: flex; gap: 15px;">
+                <div class="form-group" style="flex:1;">
+                    <label>First Name</label>
+                    <input type="text" id="firstname" required placeholder="John">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>Last Name</label>
+                    <input type="text" id="lastname" required placeholder="Doe">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Username</label>
+                <div style="position: relative;">
+                    <i class="fas fa-user" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--gray);"></i>
+                    <input type="text" id="username" required placeholder="Choose a username" style="padding-left: 40px;">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Password</label>
+                <div style="position: relative;">
+                    <i class="fas fa-lock" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--gray);"></i>
+                    <input type="password" id="password" required placeholder="Create a password" style="padding-left: 40px;">
+                </div>
+            </div>
+            
+            <button type="submit" class="btn-auth">
+                Sign Up <i class="fas fa-user-plus" style="margin-left: 10px;"></i>
+            </button>
+        </form>
+        
+        <div class="auth-footer">
+            <p>Already have an account? <a href="login.html">Login here</a></p>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showNotification(message, type = 'success') {
+        const container = document.getElementById('notification-container');
+        const notif = document.createElement('div');
+        notif.className = `notification ${type}`;
+        const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+        notif.innerHTML = `<i class="fas ${icon}"></i><span>${message}</span>`;
+        
+        container.appendChild(notif);
+        
+        setTimeout(() => {
+            notif.classList.add('hiding'); 
+            notif.addEventListener('animationend', () => {
+                notif.remove();
+            });
+        }, 3000);
+    }
+
+    document.getElementById('signup-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const first_name = document.getElementById('firstname').value;
+        const last_name = document.getElementById('lastname').value;
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        
+        try {
+            const res = await fetch('api/auth_register.php', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ first_name, last_name, username, password }) 
+            });
+            
+            const data = await res.json();
+            
+            if (res.ok) { 
+                showNotification('Account created! Redirecting...', 'success');
+                setTimeout(() => window.location.href = 'login.html', 1500);
+            } else { 
+                showNotification(data.message || 'Signup failed', 'error'); 
+            }
+        } catch (err) { 
+            console.error(err); 
+            showNotification('Connection error. Please try again.', 'error'); 
+        }
+    });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Simple POS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="notification-container" class="notification-container"></div>
+
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            <h1>Simple POS</h1>
+            <p>Welcome back! Please login to continue.</p>
+        </div>
+        
+        <form id="login-form">
+            <div class="form-group">
+                <label>Username</label>
+                <div style="position: relative;">
+                    <i class="fas fa-user" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--gray);"></i>
+                    <input type="text" id="username" required placeholder="Enter your username" style="padding-left: 40px;">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Password</label>
+                <div style="position: relative;">
+                    <i class="fas fa-lock" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--gray);"></i>
+                    <input type="password" id="password" required placeholder="Enter your password" style="padding-left: 40px;">
+                </div>
+            </div>
+            
+            <button type="submit" class="btn-auth">
+                Login <i class="fas fa-arrow-right" style="margin-left: 10px;"></i>
+            </button>
+        </form>
+        
+        <div class="auth-footer">
+            <p>Don't have an account? <a href="signup.html">Sign up here</a></p>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showNotification(message, type = 'success') {
+        const container = document.getElementById('notification-container');
+        const notif = document.createElement('div');
+        notif.className = `notification ${type}`;
+        const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+        notif.innerHTML = `<i class="fas ${icon}"></i><span>${message}</span>`;
+        
+        container.appendChild(notif);
+        
+        setTimeout(() => {
+            notif.classList.add('hiding'); 
+            notif.addEventListener('animationend', () => {
+                notif.remove();
+            });
+        }, 3000);
+    }
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        
+        try {
+            const res = await fetch('api/auth_login.php', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ username, password }) 
+            });
+            
+            const data = await res.json();
+            
+            if (res.ok) {
+                sessionStorage.setItem('user', JSON.stringify(data.user));
+                window.location.href = 'index.html';
+            } else {
+                showNotification(data.message || 'Login failed', 'error');
+            }
+        } catch (err) {
+            console.error(err);
+            showNotification('Connection error. Please try again.', 'error');
+        }
+    });
+</script>
+
+</body>
+</html>
