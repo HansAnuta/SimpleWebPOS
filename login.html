@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Simple POS</title>
+    <title>Login - Pebble POS</title>
+    <link rel="icon" type="image/png" href="pebble.png">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
@@ -15,7 +16,7 @@
 <div class="auth-container">
     <div class="auth-card">
         <div class="auth-header">
-            <h1>Simple POS</h1>
+            <h1>Pebble POS</h1>
             <p>Welcome back! Please login to continue.</p>
         </div>
         
@@ -81,7 +82,7 @@
             
             if (res.ok) {
                 sessionStorage.setItem('user', JSON.stringify(data.user));
-                window.location.href = 'index.html';
+                window.location.href = 'index.php';
             } else {
                 showNotification(data.message || 'Login failed', 'error');
             }

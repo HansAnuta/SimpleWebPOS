@@ -34,7 +34,6 @@ async function initApp() {
         return; 
     }
     
-    // 1. Load Database Settings
     await fetchSettings();
     
     showView('pos'); 
