@@ -23,25 +23,30 @@ if (!isset($_SESSION['user_id'])) {
 
 <div id="notification-container" class="notification-container"></div>
 
-<nav class="sidebar">
-    <div class="brand" id="store-brand">
-        Pebble
+<nav class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <button id="sidebar-toggle" class="sidebar-toggle-btn">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div class="brand" id="store-brand">
+            Pebble
+        </div>
     </div>
     
     <ul class="nav-links">
         <li>
             <button class="nav-btn active" onclick="showView('pos', this)">
-                <i class="fas fa-cash-register"></i> Register
+                <i class="fas fa-cash-register"></i> <span>Register</span>
             </button>
         </li>
         <li>
             <button class="nav-btn" onclick="showView('sales', this)">
-                <i class="fas fa-chart-pie"></i> Sales History
+                <i class="fas fa-chart-pie"></i> <span>Sales History</span>
             </button>
         </li>
         <li>
             <button class="nav-btn" onclick="showView('settings', this)">
-                <i class="fas fa-cog"></i> Settings
+                <i class="fas fa-cog"></i> <span>Settings</span>
             </button>
         </li>
     </ul>
@@ -51,7 +56,7 @@ if (!isset($_SESSION['user_id'])) {
             <h4 id="user-display-name">Loading...</h4>
             <small id="user-role-display">Staff</small>
         </div>
-        <button class="logout-btn" onclick="logout()">
+        <button class="logout-btn" onclick="logout()" title="Logout">
             <i class="fas fa-sign-out-alt"></i>
         </button>
     </div>
@@ -61,6 +66,9 @@ if (!isset($_SESSION['user_id'])) {
 
     <section id="pos-view" class="view-section active">
         <div class="top-header">
+            <button class="mobile-profile-btn" onclick="openModal('profile-modal')">
+                <span class="user-initial">U</span>
+            </button>
             <div class="page-title">Register</div>
             <div class="search-wrapper">
                 <i class="fas fa-search"></i>
@@ -78,12 +86,22 @@ if (!isset($_SESSION['user_id'])) {
                 <div class="product-grid" id="product-grid">
                     <div class="loading">Loading Products...</div>
                 </div>
+                <button class="mobile-cart-fab" onclick="toggleMobileCart()">
+                    
+                    <i class="fas fa-shopping-basket"></i>
+                    <span id="mobile-cart-count" class="cart-badge" style="display:none;">0</span>
+                </button>
             </div>
 
             <div class="cart-area">
                 <div class="cart-header">
+                    <button class="mobile-close-cart" onclick="toggleMobileCart()"><i class="fas fa-arrow-left"></i></button>
                     <h3>Current Order</h3>
-                    <button class="btn-danger" id="clear-cart" title="Clear Cart"><i class="fas fa-trash"></i></button>
+                    <div style="display:flex; gap:5px;">
+                        <button class="btn-primary" style="background:#f59e0b; padding:6px 10px;" onclick="parkCurrentOrder()" title="Park Order"><i class="fas fa-pause"></i></button>
+                        <button class="btn-primary" style="background:#3b82f6; padding:6px 10px;" onclick="openRecallModal()" title="Recall Order"><i class="fas fa-list-ul"></i></button>
+                        <button class="btn-danger" id="clear-cart" title="Clear Cart"><i class="fas fa-trash"></i></button>
+                    </div>
                 </div>
                 
                 <div class="cart-items" id="cart-items">
@@ -126,6 +144,10 @@ if (!isset($_SESSION['user_id'])) {
             <select id="sales-date-filter" onchange="filterSalesByDate()" style="padding: 8px 15px; border-radius: 20px; border: 1px solid #e5e7eb; background: white; margin-right: 10px; cursor: pointer; outline: none; font-family: inherit; font-size: 0.9rem;">
                 <option value="all">All Time</option>
                 <option value="today">Today</option>
+            </select>
+
+            <select id="sales-cashier-filter" onchange="filterSalesByDate()" style="display:none; padding: 8px 15px; border-radius: 20px; border: 1px solid #e5e7eb; background: white; margin-right: 10px; cursor: pointer; outline: none; font-family: inherit; font-size: 0.9rem;">
+                <option value="all">All Cashiers</option>
             </select>
 
             <button class="btn-primary" onclick="loadSalesHistory()">
@@ -189,7 +211,7 @@ if (!isset($_SESSION['user_id'])) {
         </div>
     </section>
 
-    <section id="settings-view" class="view-section">
+<section id="settings-view" class="view-section">
         <div class="top-header">
             <div class="page-title">Settings</div>
         </div>
@@ -233,8 +255,59 @@ if (!isset($_SESSION['user_id'])) {
                     </div>
                 </div>
 
+                <div class="settings-card" style="grid-column: 1 / -1; margin-top: 20px;">
+                    <div class="settings-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3>Custom Discounts</h3>
+                        <button class="btn-primary" onclick="requirePassword(() => openModal('add-discount-modal'))">
+                            <i class="fas fa-plus"></i> Add Discount
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table class="styled-table">
+                            <thead>
+                                <tr>
+                                    <th>Discount Name</th>
+                                    <th>Type & Value</th>
+                                    <th>Min Spend</th>
+                                    <th>Max Cap</th>
+                                    <th>VAT Void</th>
+                                    <th>Req. ID</th>
+                                    <th style="text-align:right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="discounts-table-body">
+                                <tr><td colspan="6" style="text-align:center;">Loading discounts...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div> <div class="settings-card" style="margin-top: 20px; width: 100%;">
+                <div class="settings-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>Cashier Accounts</h3>
+                    <button class="btn-primary" onclick="requirePassword(() => openModal('add-cashier-modal'))">
+                        <i class="fas fa-plus"></i> Add Cashier
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table class="styled-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Username</th>
+                                <th>Password</th>
+                                <th>Online Status</th>
+                                <th>Account Status</th>
+                                <th style="text-align:right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cashier-list-body">
+                            <tr><td colspan="6" style="text-align:center;">Loading cashiers...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            
+
         </div>
     </section>
 
@@ -332,17 +405,24 @@ if (!isset($_SESSION['user_id'])) {
                 </div>
             </div>
 
-            <label style="display:block; margin-bottom:8px; font-weight:600; font-size:0.85rem;">Discounts</label>
-            <div style="display:flex; gap:10px; margin-bottom:15px;">
-                <button id="btn-senior" class="btn-primary disc-btn" style="background:white; color:#374151; border:1px solid #d1d5db; flex:1;" onclick="toggleDiscountType('Senior')">
-                    <i class="fas fa-user-clock"></i> Senior
-                </button>
-                <button id="btn-pwd" class="btn-primary disc-btn" style="background:white; color:#374151; border:1px solid #d1d5db; flex:1;" onclick="toggleDiscountType('PWD')">
-                    <i class="fas fa-wheelchair"></i> PWD
+            <div style="margin-bottom: 15px; margin-top: 15px;">
+                <button id="toggle-discount-btn" type="button" class="btn-primary" style="background:#f3f4f6; color:#374151; width:100%; border:1px dashed #cbd5e1; justify-content:center; padding: 12px;" onclick="toggleDiscountSection()">
+                    <i class="fas fa-tags"></i> Add Discount
                 </button>
             </div>
 
-            <div id="discount-details-section" style="display:none; background:#eff6ff; padding:15px; border-radius:10px; margin-bottom:20px; border:1px solid #bfdbfe;">
+            <div id="discount-selection-area" style="display:none; background:#f9fafb; padding:15px; border-radius:10px; margin-bottom:15px; border:1px solid #e5e7eb;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <label style="font-weight:600; font-size:0.85rem; margin:0;">Select Discount</label>
+                    <button type="button" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--gray); line-height: 1;" onclick="toggleDiscountSection()">&times;</button>
+                </div>
+                
+                <div id="dynamic-discount-container" style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <small style="color:var(--gray);">Loading discounts...</small>
+                </div>
+            </div>
+
+            <div id="discount-details-section" style="display:none; background:#eff6ff; padding:15px; border-radius:10px; margin-bottom:15px; border:1px solid #bfdbfe;">
                 <h4 style="margin-bottom:10px; font-size:0.9rem; color:#1e40af;">Discount Requirements</h4>
                 <div style="display:flex; gap:10px;">
                     <div class="form-group" style="flex:1; margin-bottom:0;">
@@ -352,7 +432,20 @@ if (!isset($_SESSION['user_id'])) {
                         <input type="text" id="discount-id-number" placeholder="ID Number">
                     </div>
                 </div>
-                <small style="color:#60a5fa; display:block; margin-top:5px;">* Discount capped at PHP 50.00 (VAT Voided)</small>
+            </div>
+
+            <div id="checkout-breakdown" style="background:#f9fafb; padding:15px; border-radius:10px; margin-bottom:20px; font-size:0.9rem; border:1px dashed #cbd5e1;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px; color:var(--gray);">
+                    <span>Subtotal:</span><span id="chk-subtotal">PHP 0.00</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px; color:var(--success);">
+                    <span>Discount Applied: <small id="chk-disc-name"></small></span>
+                    <span id="chk-discount">-PHP 0.00</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:0; color:var(--gray);">
+                    <span>VAT <small id="chk-vat-status"></small>:</span>
+                    <span id="chk-vat">PHP 0.00</span>
+                </div>
             </div>
 
             <label style="display:block; margin-bottom:8px; font-weight:600; font-size:0.85rem;">Payment Method</label>
@@ -440,6 +533,108 @@ if (!isset($_SESSION['user_id'])) {
             <button id="confirm-yes-btn" class="btn-danger" style="width:100px;">Yes</button>
             <button class="btn-primary" style="background:#e5e7eb; color:#374151; width:100px;" onclick="closeModal('confirm-modal')">No</button>
         </div>
+    </div>
+</div>
+
+<div id="add-cashier-modal" class="modal">
+    <div class="modal-content" style="width: 400px;">
+        <div class="modal-header"><h2>Add Cashier</h2><button class="close-btn" onclick="closeModal('add-cashier-modal')">&times;</button></div>
+        <div class="form-group"><label>First Name</label><input type="text" id="cashier-fname" placeholder="John"></div>
+        <div class="form-group"><label>Last Name</label><input type="text" id="cashier-lname" placeholder="Doe"></div>
+        <div class="form-group"><label>Username</label><input type="text" id="cashier-uname" placeholder="cashier1"></div>
+        <div class="form-group"><label>Password</label><input type="text" id="cashier-pass" placeholder="SecretPass123"></div>
+        <button class="btn-primary" style="width:100%; margin-top:15px;" onclick="saveNewCashier()">Create Account</button>
+    </div>
+</div>
+
+<div id="edit-cashier-modal" class="modal">
+    <div class="modal-content" style="width: 400px;">
+        <div class="modal-header"><h2>Edit Cashier</h2><button class="close-btn" onclick="closeModal('edit-cashier-modal')">&times;</button></div>
+        <input type="hidden" id="edit-cashier-id">
+        <div class="form-group"><label>First Name</label><input type="text" id="edit-cashier-fname"></div>
+        <div class="form-group"><label>Last Name</label><input type="text" id="edit-cashier-lname"></div>
+        <button class="btn-primary" style="width:100%; margin-top:15px;" onclick="updateCashierInfo()">Update Name</button>
+    </div>
+</div>
+
+<div id="parked-modal" class="modal">
+    <div class="modal-content" style="width:500px;">
+        <div class="modal-header">
+            <h2>Parked Orders</h2>
+            <button class="close-btn" onclick="closeModal('parked-modal')">&times;</button>
+        </div>
+        <div id="parked-list" style="display:flex; flex-direction:column; gap:10px;">
+            </div>
+    </div>
+</div>
+
+<div id="add-discount-modal" class="modal">
+    <div class="modal-content" style="width: 450px;">
+        <div class="modal-header"><h2>Create Discount</h2><button class="close-btn" onclick="closeModal('add-discount-modal')">&times;</button></div>
+        
+        <div class="form-group"><label>Discount Name (e.g., Summer Promo)</label><input type="text" id="disc-name" placeholder="Name"></div>
+        
+        <div style="display:flex; gap:10px;">
+            <div class="form-group" style="flex:1;"><label>Type</label><select id="disc-type"><option value="percentage">Percentage (%)</option><option value="fixed">Fixed Amount (PHP)</option></select></div>
+            <div class="form-group" style="flex:1;"><label>Value</label><input type="number" id="disc-value" placeholder="20"></div>
+        </div>
+
+        <div style="display:flex; gap:10px;">
+            <div class="form-group" style="flex:1;"><label>Min Spend (PHP)</label><input type="number" id="disc-min" value="0"></div>
+            <div class="form-group" style="flex:1;"><label>Cap Amount (PHP)</label><input type="number" id="disc-cap" value="0"><small style="color:gray">0 = No limit</small></div>
+        </div>
+
+        <div style="margin-top:10px; display:flex; gap:15px; align-items:center;">
+            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="disc-vat"> Voids VAT</label>
+            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="disc-id"> Requires Customer ID</label>
+        </div>
+
+        <button class="btn-primary" style="width:100%; margin-top:20px;" onclick="saveNewDiscount()">Save Discount</button>
+    </div>
+</div>
+
+<div id="edit-discount-modal" class="modal">
+    <div class="modal-content" style="width: 450px;">
+        <div class="modal-header"><h2>Edit Discount</h2><button class="close-btn" onclick="closeModal('edit-discount-modal')">&times;</button></div>
+        
+        <input type="hidden" id="edit-disc-id">
+        <div class="form-group"><label>Discount Name</label><input type="text" id="edit-disc-name"></div>
+        
+        <div style="display:flex; gap:10px;">
+            <div class="form-group" style="flex:1;"><label>Type</label><select id="edit-disc-type"><option value="percentage">Percentage (%)</option><option value="fixed">Fixed Amount (PHP)</option></select></div>
+            <div class="form-group" style="flex:1;"><label>Value</label><input type="number" id="edit-disc-value"></div>
+        </div>
+
+        <div style="display:flex; gap:10px;">
+            <div class="form-group" style="flex:1;"><label>Min Spend (PHP)</label><input type="number" id="edit-disc-min"></div>
+            <div class="form-group" style="flex:1;"><label>Cap Amount (PHP)</label><input type="number" id="edit-disc-cap"><small style="color:gray">0 = No limit</small></div>
+        </div>
+
+        <div style="margin-top:10px; display:flex; gap:15px; align-items:center;">
+            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="edit-disc-vat"> Voids VAT</label>
+            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="edit-disc-id-req"> Requires Customer ID</label>
+        </div>
+
+        <button class="btn-primary" style="width:100%; margin-top:20px;" onclick="updateDiscount()">Save Changes</button>
+    </div>
+</div>
+
+<div id="profile-modal" class="modal" style="z-index: 99999;">
+    <div class="modal-content" style="width: 320px; text-align: center; padding: 25px;">
+        <div class="modal-header" style="justify-content: flex-end; margin-bottom: 0;">
+            <button class="close-btn" onclick="closeModal('profile-modal')">&times;</button>
+        </div>
+        
+        <div class="profile-avatar">
+            <span id="modal-user-initial">U</span>
+        </div>
+        
+        <h3 id="modal-user-name" style="margin: 15px 0 5px; color: var(--text);">Loading...</h3>
+        <p id="modal-user-role" style="color: var(--gray); font-size: 0.9rem; text-transform: uppercase; margin-bottom: 25px; font-weight: 600;">Staff</p>
+        
+        <button class="btn-danger" style="width: 100%; padding: 14px; font-size: 1.05rem; font-weight: bold; border-radius: 12px;" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i> Log Out
+        </button>
     </div>
 </div>
 

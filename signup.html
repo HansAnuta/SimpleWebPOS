@@ -79,9 +79,9 @@
 
     document.getElementById('signup-form').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const first_name = document.getElementById('firstname').value;
-        const last_name = document.getElementById('lastname').value;
-        const username = document.getElementById('username').value;
+        const first_name = document.getElementById('firstname').value.trim();
+        const last_name = document.getElementById('lastname').value.trim();
+        const username = document.getElementById('username').value.trim();
         const password = document.getElementById('password').value;
         
         try {

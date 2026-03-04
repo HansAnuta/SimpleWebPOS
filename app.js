@@ -7,6 +7,9 @@ let confirmCallback = null;
 let currentVatRate = 12; 
 let currentDiscountType = null;
 let selectedPaymentMethod = 'cash';
+let activeDiscounts = [];
+let appliedDiscountObj = null; // Stores the full custom discount object
+let parkedOrders = JSON.parse(localStorage.getItem('parked_orders')) || [];
 
 // Global Settings Object (Initialize with defaults)
 let posSettings = {
@@ -47,8 +50,9 @@ async function initApp() {
     // Load Data
     try { await loadCategories(); } catch (e) { console.error("Cat Error", e); }
     try { await loadProducts(); } catch (e) { console.error("Prod Error", e); }
+    try { await loadDiscounts(); } catch (e) { console.error("Disc Error", e); } // NEW
     
-    // NEW: Restore Cart from LocalStorage
+    // Restore Cart from LocalStorage
     restoreCartState();
 
     // Event Listeners
@@ -57,6 +61,14 @@ async function initApp() {
 
     const addForm = document.getElementById('add-product-form');
     if(addForm) addForm.addEventListener('submit', handleSaveProduct);
+    
+    // Sidebar Toggle Logic
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        });
+    }
     
     // Search Listeners
     const searchInput = document.getElementById('search-input');
@@ -193,7 +205,29 @@ function updateUserDisplay(user) {
     const nameEl = document.getElementById('user-display-name');
     const roleEl = document.getElementById('user-role-display');
     if(nameEl && user) nameEl.innerText = user.first_name + ' ' + user.last_name;
-    if(roleEl && user) roleEl.innerText = user.role.toUpperCase();
+    
+    let displayRole = user.role;
+    if (displayRole === 'store_admin') displayRole = 'admin';
+    if(roleEl && user) roleEl.innerText = displayRole.toUpperCase();
+
+    // --- NEW: Populate Mobile Profile Avatar & Modal ---
+    if(user) {
+        const initial = user.first_name.charAt(0).toUpperCase();
+        document.querySelectorAll('.user-initial').forEach(el => el.innerText = initial);
+        
+        if(document.getElementById('modal-user-initial')) document.getElementById('modal-user-initial').innerText = initial;
+        if(document.getElementById('modal-user-name')) document.getElementById('modal-user-name').innerText = user.first_name + ' ' + user.last_name;
+        if(document.getElementById('modal-user-role')) document.getElementById('modal-user-role').innerText = displayRole.toUpperCase();
+    }
+
+    if (user && user.role === 'cashier') {
+        document.body.classList.add('role-cashier'); 
+        const addBtn = document.querySelector('#pos-view .top-header .btn-primary');
+        if (addBtn) addBtn.style.display = 'none';
+        
+        const settingsNav = document.querySelector('button[onclick="showView(\'settings\', this)"]');
+        if (settingsNav) settingsNav.parentElement.style.display = 'none';
+    }
 }
 
 window.logout = function() { window.location.href = 'api/logout.php'; }
@@ -634,91 +668,172 @@ async function deleteProduct(id) {
 
 function calculateTotals() {
     let sub = cart.reduce((acc, i) => acc + (i.price * i.qty), 0);
-    
     let vat = 0;
     let disc = 0;
+    let vatStatusText = "(Incl.)";
     
-    if (currentDiscountType === 'Senior' || currentDiscountType === 'PWD') {
-        let vatableSales = sub / (1 + (currentVatRate / 100));
-        vat = 0; 
-        let calculatedDisc = vatableSales * 0.20;
-        disc = (calculatedDisc > 50) ? 50 : calculatedDisc;
+    if (appliedDiscountObj) {
+        // Check minimum spend
+        if (sub >= parseFloat(appliedDiscountObj.min_spend)) {
+            // Determine the basis for the discount (if VAT Exempt, discount applies to Vatable Sales only)
+            let basis = appliedDiscountObj.is_vat_exempt == 1 ? (sub / (1 + (currentVatRate/100))) : sub;
+            
+            if (appliedDiscountObj.type === 'percentage') {
+                disc = basis * (parseFloat(appliedDiscountObj.value) / 100);
+            } else {
+                disc = parseFloat(appliedDiscountObj.value); // Fixed amount
+            }
+            
+            // Apply Cap
+            let cap = parseFloat(appliedDiscountObj.cap_amount);
+            if (cap > 0 && disc > cap) { disc = cap; }
+            
+            // Calculate final VAT
+            if (appliedDiscountObj.is_vat_exempt == 1) {
+                vat = 0;
+                vatStatusText = "(Voided)";
+            } else {
+                let discountedGross = sub - disc;
+                vat = discountedGross - (discountedGross / (1 + (currentVatRate/100)));
+            }
+        } else {
+            showNotification(`Minimum spend of PHP ${appliedDiscountObj.min_spend} required`, "error");
+            appliedDiscountObj = null;
+            currentDiscountType = null;
+            document.querySelectorAll('.disc-btn').forEach(b => b.classList.remove('active-disc'));
+            toggleDiscountInputs();
+            let netSales = sub / (1 + (currentVatRate / 100));
+            vat = sub - netSales;
+        }
     } else {
         let netSales = sub / (1 + (currentVatRate / 100));
         vat = sub - netSales;
-        disc = 0;
     }
     
-    let total = (currentDiscountType) ? ((sub / (1 + (currentVatRate / 100))) - disc) : sub;
+    let total = sub - disc;
     if (total < 0) total = 0;
 
-    const subEl = document.getElementById('subtotal');
-    if(subEl) subEl.innerText = `PHP ${sub.toFixed(2)}`;
-    
-    const totalEl = document.getElementById('total');
-    if(totalEl) totalEl.innerText = `PHP ${total.toFixed(2)}`;
-    
-    const vatRow = document.getElementById('vat-row');
-    if(vatRow) {
-        const vatLabel = document.getElementById('vat-rate-disp');
-        if(vatLabel) vatLabel.innerText = currentVatRate; 
-
-        if(currentDiscountType) {
-            vatRow.style.display = 'flex';
-            document.getElementById('vat-amount').innerText = `PHP 0.00 (Void)`;
-        } else {
-            vatRow.style.display = 'flex';
-            document.getElementById('vat-amount').innerText = `PHP ${vat.toFixed(2)}`;
-        }
-    }
-
-    const discRow = document.getElementById('disc-row');
-    if(discRow) {
-        if(currentDiscountType) { 
-            discRow.style.display = 'flex'; 
-            document.getElementById('disc-amount').innerText = `-PHP ${disc.toFixed(2)}`; 
-        } else { 
-            discRow.style.display = 'none'; 
-        }
-    }
-
+    // Update main UI
+    if(document.getElementById('subtotal')) document.getElementById('subtotal').innerText = `PHP ${sub.toFixed(2)}`;
+    if(document.getElementById('total')) document.getElementById('total').innerText = `PHP ${total.toFixed(2)}`;
     if(document.getElementById('pay-total')) document.getElementById('pay-total').innerText = `PHP ${total.toFixed(2)}`;
+    
+    // Update Breakdown Modal UI
+    if(document.getElementById('chk-subtotal')) document.getElementById('chk-subtotal').innerText = `PHP ${sub.toFixed(2)}`;
+    if(document.getElementById('chk-discount')) {
+        document.getElementById('chk-discount').innerText = `-PHP ${disc.toFixed(2)}`;
+        document.getElementById('chk-disc-name').innerText = appliedDiscountObj ? `(${appliedDiscountObj.name})` : '';
+    }
+    if(document.getElementById('chk-vat')) {
+        document.getElementById('chk-vat').innerText = `PHP ${vat.toFixed(2)}`;
+        document.getElementById('chk-vat-status').innerText = vatStatusText;
+    }
+
     return { total, subtotal: sub, vatAmount: vat, discountAmount: disc };
 }
 
-window.processCheckout = function() {
+window.toggleDiscountSection = function() {
+    const area = document.getElementById('discount-selection-area');
+    const btn = document.getElementById('toggle-discount-btn');
+    if (area.style.display === 'none') {
+        area.style.display = 'block';
+        btn.style.display = 'none';
+    } else {
+        area.style.display = 'none';
+        btn.style.display = 'flex';
+    }
+}
+
+window.processCheckout = async function() {
     if (cart.length === 0) { showNotification("Cart is empty", "error"); return; }
+    
+    // Clear previous discount fields
+    const custNameInput = document.getElementById('discount-cust-name');
+    const idNumInput = document.getElementById('discount-id-number');
+    if (custNameInput) custNameInput.value = '';
+    if (idNumInput) idNumInput.value = '';
+    
+    // Reset discount state for a fresh checkout
+    appliedDiscountObj = null;
+    currentDiscountType = null;
+    
+    // Reset the UI toggle (hide the discount box by default)
+    const discArea = document.getElementById('discount-selection-area');
+    const discBtn = document.getElementById('toggle-discount-btn');
+    if(discArea) discArea.style.display = 'none';
+    if(discBtn) discBtn.style.display = 'flex';
+    if(document.getElementById('discount-details-section')) document.getElementById('discount-details-section').style.display = 'none';
+    
+    // Fetch and render
+    await loadDiscounts();
+    renderDiscountButtons(); 
+    
     calculateTotals();
     document.getElementById('amount-tendered').value = '';
     document.getElementById('ref-number').value = ''; 
-    document.getElementById('discount-cust-name').value = '';
-    document.getElementById('discount-id-number').value = '';
     selectPayment('cash');
-    toggleDiscountInputs(); 
     openModal('payment-modal');
 }
 
-window.toggleDiscountType = function(type) {
-    if (currentDiscountType === type) {
-        currentDiscountType = null;
-        const btn = document.getElementById(`btn-${type.toLowerCase()}`);
-        if(btn) btn.classList.remove('active-disc');
-    } else {
-        currentDiscountType = type;
-        document.querySelectorAll('.disc-btn').forEach(b => b.classList.remove('active-disc'));
-        const btn = document.getElementById(`btn-${type.toLowerCase()}`);
-        if(btn) btn.classList.add('active-disc');
+
+async function loadDiscounts() {
+    const res = await fetch('api/get_discounts.php');
+    activeDiscounts = await res.json();
+}
+
+function renderDiscountButtons() {
+    const container = document.getElementById('dynamic-discount-container');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    if (activeDiscounts.length === 0) {
+        container.innerHTML = '<small style="color:var(--gray);">No active discounts.</small>';
+        return;
     }
-    toggleDiscountInputs();
-    calculateTotals();
+
+    activeDiscounts.forEach(d => {
+        const btn = document.createElement('button');
+        btn.className = 'btn-primary disc-btn';
+        btn.id = `btn-disc-${d.discount_id}`;
+        btn.style.cssText = 'background:white; color:#374151; border:1px solid #d1d5db; flex:1; min-width:100px; padding:8px;';
+        
+        // Show percentage or fixed indicator
+        const valueStr = d.type === 'percentage' ? `${parseFloat(d.value)}%` : `PHP ${parseFloat(d.value)}`;
+        
+        btn.innerHTML = `<strong>${d.name}</strong><br><small>${valueStr}</small>`;
+        btn.onclick = () => toggleDiscountObj(d);
+        container.appendChild(btn);
+    });
+}
+
+window.toggleDiscountObj = function(discountObj) {
+    // Wrap the entire action in the security prompt
+    requirePassword(() => {
+        if (appliedDiscountObj && appliedDiscountObj.discount_id === discountObj.discount_id) {
+            // Deselect
+            appliedDiscountObj = null;
+            currentDiscountType = null;
+            document.querySelectorAll('.disc-btn').forEach(b => b.classList.remove('active-disc'));
+        } else {
+            // Select
+            appliedDiscountObj = discountObj;
+            currentDiscountType = discountObj.name;
+            document.querySelectorAll('.disc-btn').forEach(b => b.classList.remove('active-disc'));
+            document.getElementById(`btn-disc-${discountObj.discount_id}`).classList.add('active-disc');
+        }
+        toggleDiscountInputs();
+        calculateTotals();
+    });
 }
 
 function toggleDiscountInputs() {
     const inputs = document.getElementById('discount-details-section');
-    if (currentDiscountType) {
+    if (appliedDiscountObj && appliedDiscountObj.requires_customer_info == 1) {
         inputs.style.display = 'block';
     } else {
         inputs.style.display = 'none';
+        document.getElementById('discount-cust-name').value = '';
+        document.getElementById('discount-id-number').value = '';
     }
 }
 
@@ -891,31 +1006,75 @@ window.calculateChange = function() {
     else { changeEl.innerText = "Insufficient"; changeEl.style.color = 'red'; }
 }
 
-// --- NEW: DATE FILTER LOGIC ---
+// --- NEW: FILTER LOGIC ---
 window.filterSalesByDate = function() {
-    const filterType = document.getElementById('sales-date-filter').value;
+    const dateFilter = document.getElementById('sales-date-filter').value;
+    const cashierFilterEl = document.getElementById('sales-cashier-filter');
+    const cashierFilter = cashierFilterEl ? cashierFilterEl.value : 'all';
+    
     const now = new Date();
     const todayStr = now.toDateString();
     
-    let filteredData = [];
+    let filteredData = allSales;
     let labelText = "(All Time)";
 
-    if (filterType === 'all') {
-        filteredData = allSales;
-    } 
-    else if (filterType === 'today') {
-        filteredData = allSales.filter(sale => new Date(sale.created_at).toDateString() === todayStr);
+    // 1. Filter by Date
+    if (dateFilter === 'today') {
+        filteredData = filteredData.filter(sale => new Date(sale.created_at).toDateString() === todayStr);
         labelText = "(Today)";
     } 
-    else {
-        // Filter by Specific Month (Value is "YYYY-MM")
-        filteredData = allSales.filter(sale => sale.created_at.startsWith(filterType));
-        const [y, m] = filterType.split('-');
+    else if (dateFilter !== 'all') {
+        filteredData = filteredData.filter(sale => sale.created_at.startsWith(dateFilter));
+        const [y, m] = dateFilter.split('-');
         const date = new Date(y, m - 1);
         labelText = `(${date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })})`;
     }
 
+    // 2. Filter by Cashier
+    if (cashierFilter !== 'all') {
+        filteredData = filteredData.filter(sale => String(sale.cashier_id) === String(cashierFilter));
+        const cashierName = document.querySelector(`#sales-cashier-filter option[value="${cashierFilter}"]`).innerText;
+        labelText += ` - ${cashierName}`;
+    }
+
     // Update Revenue Label
+    const labelEl = document.getElementById('revenue-label');
+    if(labelEl) labelEl.innerText = labelText;
+
+    renderSalesTable(filteredData);
+}
+
+// --- NEW: DUAL FILTER LOGIC ---
+window.filterSalesByDate = function() {
+    const dateFilter = document.getElementById('sales-date-filter').value;
+    const cashierFilterEl = document.getElementById('sales-cashier-filter');
+    const cashierFilter = cashierFilterEl ? cashierFilterEl.value : 'all';
+    
+    const now = new Date();
+    const todayStr = now.toDateString();
+    
+    let filteredData = allSales;
+    let labelText = "(All Time)";
+
+    // 1. Filter by Date
+    if (dateFilter === 'today') {
+        filteredData = filteredData.filter(sale => new Date(sale.created_at).toDateString() === todayStr);
+        labelText = "(Today)";
+    } 
+    else if (dateFilter !== 'all') {
+        filteredData = filteredData.filter(sale => sale.created_at.startsWith(dateFilter));
+        const [y, m] = dateFilter.split('-');
+        const date = new Date(y, m - 1);
+        labelText = `(${date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })})`;
+    }
+
+    // 2. Filter by Cashier
+    if (cashierFilter !== 'all') {
+        filteredData = filteredData.filter(sale => String(sale.cashier_id) === String(cashierFilter));
+        const cashierName = document.querySelector(`#sales-cashier-filter option[value="${cashierFilter}"]`).innerText;
+        labelText += ` - ${cashierName}`;
+    }
+
     const labelEl = document.getElementById('revenue-label');
     if(labelEl) labelEl.innerText = labelText;
 
@@ -928,24 +1087,18 @@ window.loadSalesHistory = async function() {
         const res = await fetch('api/get_sales.php');
         allSales = await res.json();
         
-        // 1. Populate the Dynamic Filter
         populateDateFilter(allSales);
+        populateCashierFilter(allSales);
         
-        // 2. Render Default View (All Time)
         filterSalesByDate(); 
-        
     } catch (e) { showNotification("Error loading sales", "error"); }
 }
 
 function populateDateFilter(sales) {
     const filterEl = document.getElementById('sales-date-filter');
-    // Keep the first 2 options (All Time, Today) and clear the rest
-    filterEl.innerHTML = `
-        <option value="all">All Time</option>
-        <option value="today">Today</option>
-    `;
+    if(!filterEl) return;
+    filterEl.innerHTML = `<option value="all">All Time</option><option value="today">Today</option>`;
     
-    // Extract Unique Months (YYYY-MM)
     const months = new Set();
     sales.forEach(sale => {
         const date = new Date(sale.created_at);
@@ -953,37 +1106,56 @@ function populateDateFilter(sales) {
         months.add(key);
     });
     
-    // Sort Descending (Newest Month First)
     const sortedMonths = Array.from(months).sort().reverse();
-    
-    // Create Options
     sortedMonths.forEach(monthKey => {
         const [year, month] = monthKey.split('-');
         const date = new Date(year, month - 1);
         const label = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        
         const opt = document.createElement('option');
-        opt.value = monthKey; // Value: "2026-02"
-        opt.innerText = label; // Text: "February 2026"
+        opt.value = monthKey; opt.innerText = label;
         filterEl.appendChild(opt);
     });
 }
 
-// --- UPDATED SALES RENDERER (With Net & VAT Calc) ---
+function populateCashierFilter(sales) {
+    const filterEl = document.getElementById('sales-cashier-filter');
+    if(!filterEl) return;
+    
+    const user = JSON.parse(sessionStorage.getItem('user'));
+    // Only show the filter if the user is a Store Admin
+    if(user && user.role !== 'store_admin') {
+        filterEl.style.display = 'none'; 
+        return;
+    }
+    
+    filterEl.style.display = 'inline-block';
+    filterEl.innerHTML = '<option value="all">All Cashiers</option>';
+    
+    const cashiers = new Map();
+    sales.forEach(s => {
+        if(!cashiers.has(s.cashier_id) && s.cashier_name) {
+            cashiers.set(s.cashier_id, s.cashier_name);
+        }
+    });
+    
+    cashiers.forEach((name, id) => {
+        const opt = document.createElement('option');
+        opt.value = id; opt.innerText = name;
+        filterEl.appendChild(opt);
+    });
+}
+
+// --- UPDATED SALES RENDERER ---
 function renderSalesTable(salesData) {
     const tbody = document.getElementById('sales-table-body');
     if(!tbody) return;
     tbody.innerHTML = '';
     
-    // Initialize Totals
     let totalSales = 0;
-    let totalVat = 0; // New Variable
-    
-    // Date Grouping Helper
+    let totalVat = 0; 
     let lastDateStr = null;
     const todayStr = new Date().toDateString();
     
-    // Helper for "Yesterday"
     const yest = new Date();
     yest.setDate(yest.getDate() - 1);
     const yesterdayStr = yest.toDateString();
@@ -992,14 +1164,11 @@ function renderSalesTable(salesData) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">No matching records found.</td></tr>'; 
     } else {
         salesData.forEach(sale => {
-            // Accumulate Totals
             const saleTotal = parseFloat(sale.total_amount);
             const saleVat = parseFloat(sale.vat_amount || 0);
-            
             totalSales += saleTotal;
-            totalVat += saleVat; // Accumulate VAT
+            totalVat += saleVat; 
             
-            // --- SECTIONING LOGIC ---
             const saleDate = new Date(sale.created_at);
             const currentDateStr = saleDate.toDateString();
             
@@ -1014,7 +1183,6 @@ function renderSalesTable(salesData) {
                 tbody.appendChild(sepRow);
                 lastDateStr = currentDateStr;
             }
-            // ------------------------
 
             const tr = document.createElement('tr');
             tr.className = 'clickable-row';
@@ -1027,10 +1195,16 @@ function renderSalesTable(salesData) {
             const customerDisplay = sale.customer_name ? `<br><small style="color:#666">${sale.customer_name}</small>` : '';
             const timeStr = saleDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
+            // Show Cashier Tag for Store Admins
+            const user = JSON.parse(sessionStorage.getItem('user'));
+            const cashierBadge = (user && user.role === 'store_admin') 
+                ? `<br><small style="color:var(--primary); font-weight:600;"><i class="fas fa-user-tag"></i> ${sale.cashier_name || 'Admin'}</small>` 
+                : '';
+
             tr.innerHTML = `
                 <td style="font-family:monospace; font-weight:600; color:var(--primary);">${sale.transaction_number || sale.formatted_ref}</td>
                 <td>${timeStr}</td>
-                <td><span class="badge-service">${sale.service_type || 'Walk-in'}</span>${customerDisplay}</td>
+                <td><span class="badge-service">${sale.service_type || 'Walk-in'}</span>${customerDisplay}${cashierBadge}</td>
                 <td>${itemCount}</td>
                 <td>${discountDisplay}</td>
                 <td><span class="text-success">PHP ${saleTotal.toFixed(2)}</span></td>
@@ -1040,14 +1214,9 @@ function renderSalesTable(salesData) {
         });
     }
     
-    // Calculate Net Sales (Revenue - VAT)
     const netSales = totalSales - totalVat;
-
-    // Update All 4 Cards
     if(document.getElementById('report-total-sales')) document.getElementById('report-total-sales').innerText = `PHP ${totalSales.toFixed(2)}`;
     if(document.getElementById('report-total-orders')) document.getElementById('report-total-orders').innerText = salesData.length;
-    
-    // NEW UPDATES
     if(document.getElementById('report-net-sales')) document.getElementById('report-net-sales').innerText = `PHP ${netSales.toFixed(2)}`;
     if(document.getElementById('report-total-vat')) document.getElementById('report-total-vat').innerText = `PHP ${totalVat.toFixed(2)}`;
 }
@@ -1211,4 +1380,333 @@ async function executeSaveSettings(payload, successMsg) {
             showNotification("Save Failed: " + (data.message || "Unknown error"), "error");
         }
     } catch(e) { console.error(e); showNotification("Connection Error", "error"); }
+}
+
+// --- MOBILE CART LOGIC ---
+window.toggleMobileCart = function() {
+    const cartArea = document.querySelector('.cart-area');
+    if(cartArea) {
+        cartArea.classList.toggle('show-cart');
+    }
+}
+
+// Hook into the existing updateCartUI function to update the red badge number
+const originalUpdateCartUI = updateCartUI;
+updateCartUI = function() {
+    originalUpdateCartUI(); // Run the normal update
+    
+    // Update mobile floating button count
+    const badge = document.getElementById('mobile-cart-count');
+    if(badge) {
+        const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
+        badge.innerText = totalQty;
+        badge.style.display = totalQty > 0 ? 'block' : 'none';
+    }
+}
+
+// STORE ADMIN: CASHIER MANAGEMENT
+
+// Hook into the settings loader
+const originalLoadSettings = loadSettingsPageUI;
+loadSettingsPageUI = function() {
+    originalLoadSettings();
+    const user = JSON.parse(sessionStorage.getItem('user'));
+    if(user && user.role === 'store_admin') {
+        loadCashiers();
+    }
+};
+
+async function loadCashiers() {
+    try {
+        const res = await fetch('api/store_cashiers.php?action=get');
+        const cashiers = await res.json();
+        const tbody = document.getElementById('cashier-list-body');
+        tbody.innerHTML = '';
+        
+        if(cashiers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No cashiers created yet.</td></tr>';
+            return;
+        }
+
+        cashiers.forEach(c => {
+            const tr = document.createElement('tr');
+            
+            // Online Indicator Logic
+            const isOnline = c.is_logged_in == 1;
+            const dotColor = isOnline ? '#10b981' : '#d1d5db';
+            const onlineText = isOnline ? 'Online' : 'Offline';
+            const onlineBadge = `<div style="display:flex; align-items:center; gap:5px;"><div style="width:10px; height:10px; border-radius:50%; background:${dotColor};"></div> <small>${onlineText}</small></div>`;
+
+            // Suspended UI Logic
+            const isSuspended = c.account_status === 'suspended';
+            const suspendBtnStr = isSuspended 
+                ? `<button class="action-btn" style="background:#10b981; width:auto; padding:0 8px;" title="Unsuspend" onclick="requirePassword(() => toggleCashierStatus(${c.user_id}, 'active'))"><i class="fas fa-play"></i></button>`
+                : `<button class="action-btn" style="background:#f59e0b; width:auto; padding:0 8px;" title="Suspend" onclick="requirePassword(() => toggleCashierStatus(${c.user_id}, 'suspended'))"><i class="fas fa-pause"></i></button>`;
+
+            tr.innerHTML = `
+                <td>${c.first_name} ${c.last_name}</td>
+                <td><strong>${c.username}</strong></td>
+                <td><span style="font-family:monospace; background:#f3f4f6; padding:2px 6px; border-radius:4px;">${c.raw_password}</span></td>
+                <td>${onlineBadge}</td>
+                <td><span class="variant-badge" style="background:${isSuspended ? '#fee2e2' : '#e0e7ff'}; color:${isSuspended ? '#ef4444' : 'var(--primary)'}">${c.account_status.toUpperCase()}</span></td>
+                <td style="text-align:right; display:flex; gap:5px; justify-content:flex-end;">
+                    <button class="action-btn edit-btn" title="Edit Name" onclick="requirePassword(() => openEditCashier(${c.user_id}, '${c.first_name}', '${c.last_name}'))"><i class="fas fa-pen"></i></button>
+                    <button class="action-btn" style="background:#3b82f6;" title="Reset Password" onclick="requirePassword(() => resetCashierPassword(${c.user_id}))"><i class="fas fa-key"></i></button>
+                    ${suspendBtnStr}
+                    <button class="action-btn delete-btn" title="Delete" onclick="requirePassword(() => deleteCashier(${c.user_id}))"><i class="fas fa-trash"></i></button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) { console.error(e); }
+}
+
+async function saveNewCashier() {
+    const data = {
+        first_name: document.getElementById('cashier-fname').value,
+        last_name: document.getElementById('cashier-lname').value,
+        username: document.getElementById('cashier-uname').value,
+        password: document.getElementById('cashier-pass').value
+    };
+    
+    if(!data.first_name || !data.username || !data.password) return showNotification("Fill required fields", "error");
+
+    const res = await fetch('api/store_cashiers.php?action=add', { method: 'POST', body: JSON.stringify(data) });
+    const result = await res.json();
+    
+    if(result.success) {
+        showNotification("Cashier Added!", "success");
+        closeModal('add-cashier-modal');
+        document.getElementById('cashier-fname').value = ''; document.getElementById('cashier-lname').value = '';
+        document.getElementById('cashier-uname').value = ''; document.getElementById('cashier-pass').value = '';
+        loadCashiers();
+    } else { showNotification(result.message, "error"); }
+}
+
+function openEditCashier(id, fname, lname) {
+    document.getElementById('edit-cashier-id').value = id;
+    document.getElementById('edit-cashier-fname').value = fname;
+    document.getElementById('edit-cashier-lname').value = lname;
+    openModal('edit-cashier-modal');
+}
+
+async function updateCashierInfo() {
+    const data = {
+        user_id: document.getElementById('edit-cashier-id').value,
+        first_name: document.getElementById('edit-cashier-fname').value,
+        last_name: document.getElementById('edit-cashier-lname').value
+    };
+    await fetch('api/store_cashiers.php?action=edit', { method: 'POST', body: JSON.stringify(data) });
+    showNotification("Cashier Updated", "success");
+    closeModal('edit-cashier-modal');
+    loadCashiers();
+}
+
+async function resetCashierPassword(id) {
+    const newPass = prompt("Enter new password for cashier:");
+    if(!newPass) return;
+    await fetch('api/store_cashiers.php?action=reset_password', { method: 'POST', body: JSON.stringify({ user_id: id, password: newPass }) });
+    showNotification("Password Reset!", "success");
+    loadCashiers();
+}
+
+async function toggleCashierStatus(id, newStatus) {
+    await fetch('api/store_cashiers.php?action=update_status', { method: 'POST', body: JSON.stringify({ user_id: id, status: newStatus }) });
+    showNotification("Status Updated", "success");
+    loadCashiers();
+}
+
+// SOFT DELETE
+async function deleteCashier(id) {
+    showConfirm("Are you sure? This deletes the login, but keeps receipt history intact.", async () => {
+        await fetch('api/store_cashiers.php?action=update_status', { method: 'POST', body: JSON.stringify({ user_id: id, status: 'deleted' }) });
+        showNotification("Cashier Account Removed", "success");
+        loadCashiers();
+    });
+}
+
+// ==========================================
+// PARK ORDER SYSTEM
+// ==========================================
+window.parkCurrentOrder = function() {
+    if (cart.length === 0) { showNotification("Cart is empty", "error"); return; }
+    
+    const d = new Date();
+    const timeStr = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    const parkId = "Parked - " + timeStr;
+    
+    parkedOrders.push({
+        id: parkId,
+        timestamp: d.getTime(),
+        items: [...cart]
+    });
+    
+    localStorage.setItem('parked_orders', JSON.stringify(parkedOrders));
+    
+    cart = [];
+    updateCartUI();
+    saveCartState();
+    showNotification("Order Parked Successfully", "success");
+}
+
+window.openRecallModal = function() {
+    const list = document.getElementById('parked-list');
+    list.innerHTML = '';
+    
+    if (parkedOrders.length === 0) {
+        list.innerHTML = '<p style="text-align:center; color:var(--gray);">No parked orders.</p>';
+        openModal('parked-modal');
+        return;
+    }
+
+    parkedOrders.forEach((order, index) => {
+        let itemCount = order.items.reduce((sum, item) => sum + item.qty, 0);
+        let totalVal = order.items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+        
+        const div = document.createElement('div');
+        div.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:#f9fafb; padding:15px; border-radius:10px; border:1px solid #e5e7eb;";
+        div.innerHTML = `
+            <div>
+                <h4 style="margin:0; color:var(--primary);">${order.id}</h4>
+                <small style="color:var(--gray);">${itemCount} items | Est. Total: PHP ${totalVal.toFixed(2)}</small>
+            </div>
+            <button class="btn-primary" onclick="recallOrder(${index})"><i class="fas fa-hand-holding-usd"></i> Recall</button>
+        `;
+        list.appendChild(div);
+    });
+    
+    openModal('parked-modal');
+}
+
+window.recallOrder = function(index) {
+    if (cart.length > 0) {
+        showConfirm("Your current cart is not empty. Recalling will replace it. Proceed?", () => executeRecall(index));
+    } else {
+        executeRecall(index);
+    }
+}
+
+function executeRecall(index) {
+    cart = [...parkedOrders[index].items];
+    parkedOrders.splice(index, 1); // Remove from parked list
+    localStorage.setItem('parked_orders', JSON.stringify(parkedOrders));
+    
+    updateCartUI();
+    saveCartState();
+    closeModal('parked-modal');
+    showNotification("Order Recalled", "success");
+}
+
+// ==========================================
+// STORE ADMIN: DISCOUNT MANAGEMENT
+// ==========================================
+const originalSettingsLoader = loadSettingsPageUI;
+loadSettingsPageUI = function() {
+    originalSettingsLoader();
+    const user = JSON.parse(sessionStorage.getItem('user'));
+    if(user && user.role === 'store_admin') {
+        loadDiscountTable();
+    }
+};
+
+async function loadDiscountTable() {
+    const res = await fetch('api/get_discounts.php');
+    const discounts = await res.json();
+    const tbody = document.getElementById('discounts-table-body');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    
+    if (discounts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No discounts created.</td></tr>';
+        return;
+    }
+
+    discounts.forEach(d => {
+        const valStr = d.type === 'percentage' ? `${parseFloat(d.value)}%` : `PHP ${parseFloat(d.value)}`;
+        const tr = document.createElement('tr');
+        
+        // Sanitize string for JS function call
+        const safeName = d.name.replace(/'/g, "\\'");
+
+        tr.innerHTML = `
+            <td><strong>${d.name}</strong></td>
+            <td>${valStr}</td>
+            <td>PHP ${parseFloat(d.min_spend).toFixed(2)}</td>
+            <td>${parseFloat(d.cap_amount) > 0 ? 'PHP ' + parseFloat(d.cap_amount).toFixed(2) : 'None'}</td>
+            <td>${d.is_vat_exempt == 1 ? '<i class="fas fa-check text-success"></i>' : '-'}</td>
+            <td>${d.requires_customer_info == 1 ? '<i class="fas fa-check text-success"></i>' : '-'}</td>
+            <td style="text-align:right;">
+                <button class="action-btn edit-btn" style="display:inline-flex; width:28px; height:28px;" title="Edit" onclick="requirePassword(() => openEditDiscount(${d.discount_id}, '${safeName}', '${d.type}', ${d.value}, ${d.min_spend}, ${d.cap_amount}, ${d.is_vat_exempt}, ${d.requires_customer_info}))"><i class="fas fa-pen"></i></button>
+                <button class="action-btn delete-btn" style="display:inline-flex; width:28px; height:28px;" title="Delete" onclick="requirePassword(() => deleteDiscount(${d.discount_id}))"><i class="fas fa-trash"></i></button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function saveNewDiscount() {
+    const data = {
+        name: document.getElementById('disc-name').value,
+        type: document.getElementById('disc-type').value,
+        value: document.getElementById('disc-value').value,
+        min_spend: document.getElementById('disc-min').value || 0,
+        cap_amount: document.getElementById('disc-cap').value || 0,
+        is_vat_exempt: document.getElementById('disc-vat').checked ? 1 : 0,
+        requires_customer_info: document.getElementById('disc-id').checked ? 1 : 0
+    };
+    
+    if(!data.name || !data.value) return showNotification("Name and Value required", "error");
+
+    const res = await fetch('api/save_discount.php', { method: 'POST', body: JSON.stringify(data) });
+    if(res.ok) {
+        showNotification("Discount Created!", "success");
+        closeModal('add-discount-modal');
+        loadDiscountTable();
+    } else {
+        showNotification("Error saving discount", "error");
+    }
+}
+
+window.openEditDiscount = function(id, name, type, value, min, cap, vat, reqId) {
+    document.getElementById('edit-disc-id').value = id;
+    document.getElementById('edit-disc-name').value = name;
+    document.getElementById('edit-disc-type').value = type;
+    document.getElementById('edit-disc-value').value = value;
+    document.getElementById('edit-disc-min').value = min;
+    document.getElementById('edit-disc-cap').value = cap;
+    document.getElementById('edit-disc-vat').checked = vat == 1;
+    document.getElementById('edit-disc-id-req').checked = reqId == 1;
+    openModal('edit-discount-modal');
+}
+
+window.updateDiscount = async function() {
+    const data = {
+        id: document.getElementById('edit-disc-id').value,
+        name: document.getElementById('edit-disc-name').value,
+        type: document.getElementById('edit-disc-type').value,
+        value: document.getElementById('edit-disc-value').value,
+        min_spend: document.getElementById('edit-disc-min').value || 0,
+        cap_amount: document.getElementById('edit-disc-cap').value || 0,
+        is_vat_exempt: document.getElementById('edit-disc-vat').checked ? 1 : 0,
+        requires_customer_info: document.getElementById('edit-disc-id-req').checked ? 1 : 0
+    };
+
+    if(!data.name || !data.value) return showNotification("Name and Value required", "error");
+
+    const res = await fetch('api/edit_discount.php', { method: 'POST', body: JSON.stringify(data) });
+    if(res.ok) {
+        showNotification("Discount Updated!", "success");
+        closeModal('edit-discount-modal');
+        loadDiscountTable();
+    } else { showNotification("Error updating discount", "error"); }
+}
+
+window.deleteDiscount = async function(id) {
+    showConfirm("Delete this discount? (Will not affect past receipts)", async () => {
+        const res = await fetch('api/delete_discount.php', { method: 'POST', body: JSON.stringify({ id: id }) });
+        if(res.ok) {
+            showNotification("Discount Deleted", "success");
+            loadDiscountTable();
+        } else { showNotification("Error deleting discount", "error"); }
+    });
 }

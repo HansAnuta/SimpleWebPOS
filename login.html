@@ -49,48 +49,47 @@
 </div>
 
 <script>
-    function showNotification(message, type = 'success') {
-        const container = document.getElementById('notification-container');
-        const notif = document.createElement('div');
-        notif.className = `notification ${type}`;
-        const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
-        notif.innerHTML = `<i class="fas ${icon}"></i><span>${message}</span>`;
-        
-        container.appendChild(notif);
-        
-        setTimeout(() => {
-            notif.classList.add('hiding'); 
-            notif.addEventListener('animationend', () => {
-                notif.remove();
-            });
-        }, 3000);
-    }
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    const btn = e.target.querySelector('button');
+    const originalText = btn.innerHTML;
+    
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
+    btn.disabled = true;
 
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-        
-        try {
-            const res = await fetch('api/auth_login.php', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ username, password }) 
-            });
-            
-            const data = await res.json();
-            
-            if (res.ok) {
-                sessionStorage.setItem('user', JSON.stringify(data.user));
-                window.location.href = 'index.php';
+    try {
+        const response = await fetch('api/auth_login.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (response.status === 403 && data.redirect) {
+            // Redirect suspended/inactive users immediately
+            window.location.href = data.redirect;
+        } else if (response.ok) {
+            // Role-based routing: Send developers to their own dashboard
+            if (data.user && data.user.role === 'developer') {
+                window.location.href = 'developer.php';
             } else {
-                showNotification(data.message || 'Login failed', 'error');
+                window.location.href = 'index.php'; // Admins and Cashiers go to POS
             }
-        } catch (err) {
-            console.error(err);
-            showNotification('Connection error. Please try again.', 'error');
+        } else {
+            alert(data.message || "Login failed");
+            btn.innerHTML = originalText;
+            btn.disabled = false;
         }
-    });
+    } catch (error) {
+        console.error('Error:', error);
+        alert("Connection error. Please try again.");
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+});
 </script>
 
 </body>
