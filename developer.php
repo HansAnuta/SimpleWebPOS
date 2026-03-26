@@ -1,121 +1,145 @@
 <?php
-session_start();
-// Security Gate: Check if user is logged in AND is a developer
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'developer') {
-    header("Location: login.html");
-    exit();
+session_start(); // THIS MUST BE FIRST
+require_once __DIR__ . '/security_headers.php'; 
+
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'developer') { 
+    header("Location: dev_gate.php"); 
+    exit(); 
 }
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Developer Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pebble Command Center</title>
     <link rel="stylesheet" href="style.css">
-    <style>
-        .dev-container { padding: 40px; max-width: 1200px; margin: 0 auto; }
-        .dev-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-        .dev-header h1 { color: var(--primary); margin: 0; }
-        .raw-pass { font-family: monospace; background: #e5e7eb; padding: 4px 8px; border-radius: 4px; color: #ef4444; font-weight: bold; }
-        select { padding: 6px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; }
-    </style>
+    <link rel="icon" type="image/png" href="pebble.png">
 </head>
 <body>
 
 <div id="notification-container" class="notification-container"></div>
 
-<div class="dev-container">
-    <div class="dev-header">
-        <h1><i class="fas fa-terminal"></i> Developer Control Panel</h1>
-        <div>
-            <button class="btn-primary" onclick="loadUsers()"><i class="fas fa-sync"></i> Refresh</button>
-            <button class="btn-danger" onclick="window.location.href='api/logout.php'"><i class="fas fa-sign-out-alt"></i> Logout</button>
+<nav class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <button id="sidebar-toggle" class="sidebar-toggle-btn">
+            <img src="icons/menu.png" class="ui-icon" alt="menu">
+        </button>
+        <div class="brand" id="store-brand">
+            Pebble Admin
         </div>
     </div>
+    
+    <ul class="nav-links">
+        <li>
+            <button class="nav-btn active">
+                <img src="icons/username.png" class="ui-icon" alt="accounts"> <span>Accounts</span>
+            </button>
+        </li>
+        <li>
+            <button class="nav-btn" id="dev-analytics-btn">
+                <img src="icons/revenue.png" class="ui-icon" alt="analytics"> <span>Analytics</span>
+            </button>
+        </li>
+        <li>
+            <button class="nav-btn" id="dev-global-config-btn">
+                <img src="icons/settings.png" class="ui-icon" alt="global config"> <span>Global Config</span>
+            </button>
+        </li>
+    </ul>
 
-    <div class="table-container">
-        <table class="styled-table">
-            <thead>
-                <tr>
-                    <th>Account Name</th>
-                    <th>Username</th>
-                    <th>Password (Raw)</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="users-table-body">
-                <tr><td colspan="6" style="text-align:center;">Loading system users...</td></tr>
-            </tbody>
-        </table>
+    <div class="user-profile">
+        <div class="user-info">
+            <h4>Developer</h4>
+            <small>Super Admin</small>
+        </div>
+        <button id="logout-btn">
+            <img src="icons/logout.png" class="ui-icon" alt="logout">
+        </button>
+    </div>
+</nav>
+
+<div class="main-content">
+    <div class="top-header">
+        <div class="page-title">Dashboard Overview</div>
+        <button class="btn-primary" style="background: var(--danger);" id="dev-terminate-btn">
+            <img src="icons/restricted.png" class="ui-icon" alt="terminate"> Terminate
+        </button>
+    </div>
+
+    <div class="sales-view-content" style="padding: 20px;">
+        <div class="stats-cards">
+            <div class="stat-card">
+                <div class="stat-icon" style="background:#e0f2fe; color:#0ea5e9;"><img src="icons/home.png" class="ui-icon" alt="stores"></div>
+                <div class="stat-info">
+                    <h3><span id="stat-managers">0</span></h3>
+                    <p>Total Stores</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="background:#dcfce7; color:#16a34a;"><img src="icons/success.png" class="ui-icon" alt="active"></div>
+                <div class="stat-info">
+                    <h3><span id="stat-active">0</span></h3>
+                    <p>Active Plans</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="background:#fee2e2; color:#ef4444;"><img src="icons/error.png" class="ui-icon" alt="expired"></div>
+                <div class="stat-info">
+                    <h3><span id="stat-expired">0</span></h3>
+                    <p>Expired</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="background:#f3e8ff; color:#a855f7;"><img src="icons/username.png" class="ui-icon" alt="cashiers"></div>
+                <div class="stat-info">
+                    <h3><span id="stat-cashiers">0</span></h3>
+                    <p>Total Cashiers</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-container" style="margin-top: 20px;">
+            <div style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);">
+                <h3 style="margin: 0; color: var(--text);">Network Deployments</h3>
+                <button class="btn-primary" style="background: white; color: var(--text); border: 1px solid var(--border);" id="dev-refresh-users-btn">
+                    <img src="icons/refresh.png" class="ui-icon" alt="refresh"> Refresh
+                </button>
+            </div>
+            <table class="styled-table">
+                <thead>
+                    <tr>
+                        <th width="5%"></th>
+                        <th>Account Detail</th>
+                        <th>Credentials</th>
+                        <th>SaaS Subscription</th>
+                        <th>Status</th>
+                        <th style="text-align: right;">Management Tools</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table-body">
+                    <tr><td colspan="6" style="text-align:center; padding: 40px;">Syncing data with mainframes...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
-<script>
-    document.addEventListener('DOMContentLoaded', loadUsers);
+<div id="warning-modal" class="modal">
+    <div class="modal-content" style="width: 450px;">
+        <div class="modal-header">
+            <h2>System Warning</h2>
+            <button class="close-btn" id="warning-modal-close-btn">&times;</button>
+        </div>
+        <div class="form-group">
+            <label>Force display message on Manager login:</label>
+            <input type="hidden" id="warning-user-id">
+            <textarea id="warning-text" rows="4" style="width: 100%; padding: 15px; border-radius: 10px; border: 2px solid var(--border); font-family: inherit; resize: none; outline: none;"></textarea>
+        </div>
+        <button class="btn-primary" style="width: 100%; margin-top: 15px;" id="send-warning-btn">Deploy Warning Message</button>
+    </div>
+</div>
 
-    async function loadUsers() {
-        try {
-            const res = await fetch('api/dev_admin.php?action=get_users');
-            const users = await res.json();
-            const tbody = document.getElementById('users-table-body');
-            tbody.innerHTML = '';
-            
-            users.forEach(u => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${u.first_name} ${u.last_name}</td>
-                    <td><strong>${u.username}</strong></td>
-                    <td><span class="raw-pass">${u.raw_password || 'encrypted'}</span></td>
-                    <td><span class="variant-badge">${u.role.toUpperCase()}</span></td>
-                    <td>
-                        <select onchange="updateUserStatus(${u.user_id}, this.value)">
-                            <option value="active" ${u.account_status === 'active' ? 'selected' : ''}>Active</option>
-                            <option value="inactive" ${u.account_status === 'inactive' ? 'selected' : ''}>Inactive</option>
-                            <option value="suspended" ${u.account_status === 'suspended' ? 'selected' : ''}>Suspended</option>
-                        </select>
-                    </td>
-                    <td>
-                        <button class="btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" onclick="resetPassword(${u.user_id})">
-                            <i class="fas fa-key"></i> Reset Pass
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        } catch (e) { console.error(e); }
-    }
-
-    async function updateUserStatus(id, status) {
-        await fetch('api/dev_admin.php?action=update_status', {
-            method: 'POST', body: JSON.stringify({ user_id: id, status: status })
-        });
-        showNotification("Account status updated.", "success");
-    }
-
-    async function resetPassword(id) {
-        const newPass = prompt("Enter the new password for this user:");
-        if(!newPass) return;
-        
-        await fetch('api/dev_admin.php?action=reset_password', {
-            method: 'POST', body: JSON.stringify({ user_id: id, new_password: newPass })
-        });
-        showNotification("Password changed successfully.", "success");
-        loadUsers();
-    }
-
-    function showNotification(message, type = 'success') {
-        const container = document.getElementById('notification-container');
-        const notif = document.createElement('div');
-        notif.className = `notification ${type}`;
-        notif.innerHTML = `<span>${message}</span>`;
-        container.appendChild(notif);
-        setTimeout(() => { notif.classList.add('hiding'); setTimeout(() => notif.remove(), 400); }, 3000);
-    }
-</script>
+<script src="dev_admin.js"></script>
 </body>
 </html>

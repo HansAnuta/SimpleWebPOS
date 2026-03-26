@@ -14,6 +14,7 @@ if (!isset($_SESSION['user_id'])) {
 
 // 1. Get Data
 $name = $_POST['name'] ?? null;
+$type = $_POST['type'] ?? 'product';
 $category_name = $_POST['category_name'] ?? null;
 $price = $_POST['price'] ?? 0;
 // NEW: Get Product Code (Optional)
@@ -54,16 +55,16 @@ try {
     $pdo->beginTransaction();
     $user_id = $_SESSION['user_id'];
 
-    // 3. Category Logic
-    $stmt = $pdo->prepare("SELECT category_id FROM categories WHERE name = ? AND user_id = ?");
-    $stmt->execute([$category_name, $user_id]);
+// 3. Category Logic
+    $stmt = $pdo->prepare("SELECT category_id FROM categories WHERE name = ? AND user_id = ? AND type = ?");
+    $stmt->execute([$category_name, $user_id, $type]);
     $cat = $stmt->fetch();
 
     if ($cat) {
         $category_id = $cat['category_id'];
     } else {
-        $stmt = $pdo->prepare("INSERT INTO categories (name, user_id) VALUES (?, ?)");
-        $stmt->execute([$category_name, $user_id]);
+        $stmt = $pdo->prepare("INSERT INTO categories (name, user_id, type) VALUES (?, ?, ?)");
+        $stmt->execute([$category_name, $user_id, $type]);
         $category_id = $pdo->lastInsertId();
     }
 

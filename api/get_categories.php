@@ -19,7 +19,7 @@ try {
     
     $admin_id = ($u['role'] === 'cashier' && !empty($u['parent_id'])) ? $u['parent_id'] : $_SESSION['user_id'];
 
-    $sql = "SELECT category_id, name FROM categories WHERE user_id = ? ORDER BY name ASC";
+    $sql = "SELECT category_id, name, type FROM categories WHERE user_id = ? ORDER BY name ASC";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$admin_id]);
     $categories = $stmt->fetchAll();

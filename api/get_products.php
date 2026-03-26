@@ -23,7 +23,7 @@ try {
     $admin_id = ($u['role'] === 'cashier' && !empty($u['parent_id'])) ? $u['parent_id'] : $_SESSION['user_id'];
 
     // 1. Get Products using admin_id
-    $sql = "SELECT p.*, c.name as category_name 
+    $sql = "SELECT p.*, c.name as category_name, c.type as category_type 
             FROM products p 
             LEFT JOIN categories c ON p.category_id = c.category_id 
             WHERE p.user_id = ? 

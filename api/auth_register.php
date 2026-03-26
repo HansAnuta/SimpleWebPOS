@@ -1,3 +1,4 @@
+<?php require_once __DIR__ . '/security_headers.php'; ?>
 <?php
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
@@ -24,11 +25,11 @@ if ($check->rowCount() > 0) {
 $password_hash = password_hash($data->password, PASSWORD_DEFAULT);
 
 try {
-    // 1 & 2. Insert new user explicitly as 'store_admin' and store raw_password for Dev Dashboard
-    $sql = "INSERT INTO users (first_name, last_name, username, password, raw_password, role, account_status) VALUES (?, ?, ?, ?, ?, 'store_admin', 'active')";
+    // 1 & 2. Insert new user explicitly as 'store_admin' using hashed password only
+    $sql = "INSERT INTO users (first_name, last_name, username, password, role, account_status) VALUES (?, ?, ?, ?, 'store_admin', 'active')";
     $stmt = $pdo->prepare($sql);
     
-    if ($stmt->execute([$data->first_name, $data->last_name, $data->username, $password_hash, $data->password])) { 
+    if ($stmt->execute([$data->first_name, $data->last_name, $data->username, $password_hash])) { 
         
         // 3. Get the new User ID and create default store settings to prevent crashes
         $new_user_id = $pdo->lastInsertId();

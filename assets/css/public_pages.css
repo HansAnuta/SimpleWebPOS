@@ -1,0 +1,232 @@
+body.public-landing {
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    background-color: #f9fafb;
+    color: #1f2937;
+}
+
+.public-landing nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 50px;
+    background: #fff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.public-landing .logo {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #4f46e5;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.public-landing .nav-links a {
+    margin-left: 20px;
+    text-decoration: none;
+    color: #4b5563;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.public-landing .nav-links a:hover {
+    color: #4f46e5;
+}
+
+.public-landing .btn-login {
+    background: #4f46e5;
+    color: #fff !important;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+.public-landing .btn-login:hover {
+    background: #4338ca;
+}
+
+.public-landing #expired-banner {
+    display: none;
+    background: #fee2e2;
+    color: #b91c1c;
+    text-align: center;
+    padding: 15px;
+    font-weight: 600;
+    border-bottom: 2px solid #ef4444;
+}
+
+.public-landing .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 100px 20px;
+    background: linear-gradient(135deg, #e0e7ff 0%, #f3f4f6 100%);
+}
+
+.public-landing .hero h1 {
+    font-size: 3.5rem;
+    font-weight: 800;
+    margin-bottom: 20px;
+    color: #111827;
+    letter-spacing: -1px;
+    max-width: 800px;
+}
+
+.public-landing .hero p {
+    font-size: 1.2rem;
+    color: #6b7280;
+    margin-bottom: 40px;
+    max-width: 600px;
+    line-height: 1.6;
+}
+
+.public-landing .hero-btns {
+    display: flex;
+    gap: 15px;
+}
+
+.public-landing .btn-primary {
+    background: #4f46e5;
+    color: #fff;
+    padding: 15px 30px;
+    text-decoration: none;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    box-shadow: 0 10px 20px rgba(79, 70, 229, 0.2);
+    transition: 0.3s;
+}
+
+.public-landing .btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 25px rgba(79, 70, 229, 0.3);
+}
+
+.public-landing .btn-secondary {
+    background: #fff;
+    color: #4f46e5;
+    padding: 15px 30px;
+    text-decoration: none;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border: 2px solid #e0e7ff;
+    transition: 0.3s;
+}
+
+.public-landing .btn-secondary:hover {
+    border-color: #4f46e5;
+}
+
+.public-landing .features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    padding: 80px 50px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.public-landing .feature-card {
+    background: #fff;
+    padding: 40px 30px;
+    border-radius: 15px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    transition: 0.3s;
+}
+
+.public-landing .feature-card:hover {
+    transform: translateY(-5px);
+}
+
+.public-landing .feature-card i {
+    font-size: 3rem;
+    color: #4f46e5;
+    margin-bottom: 20px;
+}
+
+.public-landing .feature-card h3 {
+    font-size: 1.3rem;
+    margin-bottom: 15px;
+}
+
+.public-landing .feature-card p {
+    color: #6b7280;
+    line-height: 1.6;
+}
+
+.public-landing footer {
+    background: #1f2937;
+    color: #fff;
+    text-align: center;
+    padding: 30px;
+    margin-top: 50px;
+}
+
+body.status-page {
+    font-family: 'Poppins', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+}
+
+body.status-page.inactive {
+    background: #f3f4f6;
+}
+
+body.status-page.suspended {
+    background: #fee2e2;
+}
+
+.status-page .card {
+    background: #fff;
+    padding: 40px;
+    border-radius: 15px;
+    text-align: center;
+    max-width: 400px;
+}
+
+body.status-page.inactive .card {
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+body.status-page.suspended .card {
+    box-shadow: 0 10px 30px rgba(239, 68, 68, 0.2);
+    border-top: 5px solid #ef4444;
+}
+
+body.status-page.inactive h1 {
+    color: #f59e0b;
+}
+
+body.status-page.suspended h1 {
+    color: #ef4444;
+}
+
+.status-page p {
+    color: #6b7280;
+}
+
+.status-page a {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 10px 20px;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+body.status-page.inactive a {
+    background: #4f46e5;
+}
+
+body.status-page.suspended a {
+    background: #ef4444;
+}

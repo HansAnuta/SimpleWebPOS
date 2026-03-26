@@ -1,7 +1,6 @@
 <?php
-
 $host = 'localhost';
-$db   = 'spos_db';
+$db   = 'u346699795_pebblepos';
 $user = 'root';      
 $pass = '';      
 $charset = 'utf8mb4';
@@ -15,12 +14,13 @@ $options = [
 
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
+    $pdo->exec("SET time_zone = '+08:00';");
+    
 } catch (\PDOException $e) {
-    // Return JSON error so frontend doesn't choke on HTML error string
-    if (!headers_sent()) {
-        header('Content-Type: application/json');
-    }
+    if (!headers_sent()) { header('Content-Type: application/json'); }
     http_response_code(500);
+    // Note for future iteration: We will sanitize this error output later.
     echo json_encode(['error' => 'Database connection failed: ' . $e->getMessage()]);
     exit;
 }
+?>

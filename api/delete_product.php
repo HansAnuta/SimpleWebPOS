@@ -30,6 +30,23 @@ try {
 
     $category_id = $product['category_id'];
 
+    // --- NEW: DELETE PHYSICAL IMAGE FILE ---
+    // 1. Fetch the image path from the database BEFORE we delete the record
+    $stmt_img = $pdo->prepare("SELECT image FROM products WHERE product_id = :pid");
+    $stmt_img->execute([':pid' => $data->product_id]);
+    $product = $stmt_img->fetch(PDO::FETCH_ASSOC);
+
+    // 2. If an image exists, delete it from the server
+    if ($product && !empty($product['image'])) {
+        // Since this file is inside the 'api/' folder, we use '../' to go up one level to find 'uploads/'
+        $file_path = '../' . ltrim($product['image'], '/');
+        
+        // Check if the file actually exists before trying to delete it
+        if (file_exists($file_path)) {
+            unlink($file_path); // This is the PHP function that permanently deletes the file!
+        }
+    }
+
     // 2. Delete the Product Record
     $stmt = $pdo->prepare("DELETE FROM products WHERE product_id = ?");
     $stmt->execute([$product_id]);
